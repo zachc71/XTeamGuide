@@ -31,7 +31,7 @@ const PlusIcon = () => (
     </svg>
 );
 const PencilIcon = () => (
-    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path>
     </svg>
 );
@@ -40,9 +40,9 @@ const PencilIcon = () => (
 const initialData = {
     managers: ["Manager - Alex Ray", "Manager - Jordan Lee", "Manager - Casey Smith"],
     reports: [
-        { id: "rep_1", title: "Team Activities Today", imageUrl: "https://placehold.co/600x400/3b82f6/ffffff?text=Activities", links: { "Manager - Alex Ray": "https://example.com/report/activities/alex", "Manager - Jordan Lee": "https://example.com/report/activities/jordan", "Manager - Casey Smith": "https://example.com/report/activities/casey" } },
-        { id: "rep_2", title: "Team Accounts by Status", imageUrl: "https://placehold.co/600x400/10b981/ffffff?text=Accounts", links: { "Manager - Alex Ray": "https://example.com/report/accounts/alex", "Manager - Jordan Lee": "https://example.com/report/accounts/jordan", "Manager - Casey Smith": "https://example.com/report/accounts/casey" } },
-        { id: "rep_3", title: "Team Leads", imageUrl: "https://placehold.co/600x400/f97316/ffffff?text=Leads", links: { "Manager - Alex Ray": "https://example.com/report/leads/alex", "Manager - Jordan Lee": "https://example.com/report/leads/jordan", "Manager - Casey Smith": "https://example.com/report/leads/casey" } },
+        { id: "rep_1", title: "Team Activities Today", links: { "Manager - Alex Ray": "https://example.com/report/activities/alex", "Manager - Jordan Lee": "https://example.com/report/activities/jordan", "Manager - Casey Smith": "https://example.com/report/activities/casey" } },
+        { id: "rep_2", title: "Team Accounts by Status", links: { "Manager - Alex Ray": "https://example.com/report/accounts/alex", "Manager - Jordan Lee": "https://example.com/report/accounts/jordan", "Manager - Casey Smith": "https://example.com/report/accounts/casey" } },
+        { id: "rep_3", title: "Team Leads", links: { "Manager - Alex Ray": "https://example.com/report/leads/alex", "Manager - Jordan Lee": "https://example.com/report/leads/jordan", "Manager - Casey Smith": "https://example.com/report/leads/casey" } },
     ]
 };
 
@@ -82,7 +82,6 @@ export default function App() {
     useEffect(() => {
         if (!isAuthReady || !db) return;
 
-        // Use a consistent document path for your public data
         const configRef = doc(db, 'publicDashboard/mainConfig');
 
         const unsubscribe = onSnapshot(configRef, (docSnap) => {
@@ -148,7 +147,7 @@ export default function App() {
         });
     };
 
-    const handleAddReport = async (reportTitle, imageUrl) => {
+    const handleAddReport = async (reportTitle) => {
         if (!db || !reportTitle) return;
 
         const newReportId = `rep_${new Date().getTime()}`;
@@ -157,7 +156,6 @@ export default function App() {
         const newReport = {
             id: newReportId,
             title: reportTitle,
-            imageUrl: imageUrl || `https://placehold.co/600x400/cccccc/ffffff?text=New+Report`,
             links: newLinks
         };
 
@@ -173,9 +171,9 @@ export default function App() {
     }
 
     return (
-        <div className="min-h-screen bg-gray-100 font-sans">
+        <div className="min-h-screen bg-[#f4f6f8] font-sans">
             <Header view={view} setView={setView} />
-            <main className="container mx-auto px-4 sm:px-6 py-8">
+            <main className="container mx-auto p-8">
                 {view === 'dashboard' ? (
                     <DashboardView
                         config={config}
@@ -201,13 +199,13 @@ export default function App() {
 
 function Header({ view, setView }) {
     return (
-        <header className="bg-blue-600 text-white shadow-lg">
-            <div className="container mx-auto px-4 sm:px-6 flex justify-between items-center h-16">
-                <h1 className="text-2xl font-bold">Team Dashboard</h1>
+        <header className="bg-[#1a73e8] text-white text-center py-4 px-8">
+            <div className="container mx-auto flex justify-between items-center">
+                <h1 className="text-2xl font-bold flex-grow">Team Dashboard</h1>
                 <nav>
                     <button
                         onClick={() => setView(view === 'dashboard' ? 'settings' : 'dashboard')}
-                        className="flex items-center gap-2 px-4 py-2 rounded-md bg-white/20 hover:bg-white/30 transition-colors"
+                        className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-white/20 hover:bg-white/30 transition-colors"
                         title={view === 'dashboard' ? 'Go to Settings' : 'Go to Dashboard'}
                     >
                         {view === 'dashboard' ? <SettingsIcon /> : <HomeIcon />}
@@ -220,7 +218,7 @@ function Header({ view, setView }) {
 }
 
 function DashboardView({ config, selectedManager, setSelectedManager, onUpdateLink }) {
-    const [editing, setEditing] = useState(null); // { reportId, link }
+    const [editing, setEditing] = useState(null);
 
     const handleEditClick = (report) => {
         setEditing({ reportId: report.id, link: report.links[selectedManager] || '' });
@@ -244,18 +242,17 @@ function DashboardView({ config, selectedManager, setSelectedManager, onUpdateLi
 
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
                 {config.reports.map(report => (
-                    <div key={report.id} className="card bg-white rounded-xl shadow-md overflow-hidden flex flex-col transition-all duration-200 hover:shadow-lg hover:-translate-y-1">
-                        <img src={report.imageUrl} alt={report.title} className="w-full h-32 object-cover" onError={(e) => { e.target.onerror = null; e.target.src='https://placehold.co/600x400/cccccc/ffffff?text=Image+Error'; }} />
-                        <div className="p-4 flex flex-col flex-grow justify-between relative">
-                            <h3 className="text-lg font-semibold text-gray-800 mb-4 pr-8">{report.title}</h3>
-                            <button onClick={() => handleEditClick(report)} className="absolute top-3 right-3 p-1 text-gray-400 hover:text-blue-600 rounded-full hover:bg-gray-100 transition-colors" title="Edit Link">
+                    <div key={report.id} className="bg-white rounded-xl shadow-[0_4px_12px_rgba(0,0,0,0.08)] p-6 flex flex-col justify-between transition-all duration-150 hover:-translate-y-1 hover:shadow-[0_8px_18px_rgba(0,0,0,0.12)]">
+                        <div className="flex justify-between items-start">
+                             <h3 className="text-xl font-semibold text-gray-800 mb-4">{report.title}</h3>
+                             <button onClick={() => handleEditClick(report)} className="p-1 text-gray-400 hover:text-[#1a73e8] rounded-full hover:bg-gray-100 transition-colors" title="Edit Link">
                                 <PencilIcon />
                             </button>
-                            <div className="mt-auto">
-                                <a href={report.links[selectedManager] || '#'} target="_blank" rel="noopener noreferrer" className={`block w-full text-center bg-blue-600 text-white font-medium py-2 px-4 rounded-md hover:bg-blue-700 transition-colors duration-200 ${!report.links[selectedManager] ? 'opacity-50 cursor-not-allowed' : ''}`}>
-                                    Open Report
-                                </a>
-                            </div>
+                        </div>
+                        <div className="mt-auto">
+                            <a href={report.links[selectedManager] || '#'} target="_blank" rel="noopener noreferrer" className={`block w-full text-center bg-[#1a73e8] text-white font-medium py-2.5 px-4 rounded-md hover:bg-[#1558b0] transition-colors duration-200 ${!report.links[selectedManager] ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                                Open Report
+                            </a>
                         </div>
                     </div>
                 ))}
@@ -270,7 +267,7 @@ function DashboardView({ config, selectedManager, setSelectedManager, onUpdateLi
                         <input type="url" value={editing.link} onChange={(e) => setEditing({ ...editing, link: e.target.value })} className="w-full p-2 border border-gray-300 rounded-md mb-4" placeholder="https://example.com/report/..."/>
                         <div className="flex justify-end gap-4">
                             <button onClick={() => setEditing(null)} className="px-4 py-2 bg-gray-200 rounded-md hover:bg-gray-300 transition-colors">Cancel</button>
-                            <button onClick={handleSaveEdit} className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors">Save</button>
+                            <button onClick={handleSaveEdit} className="px-4 py-2 bg-[#1a73e8] text-white rounded-md hover:bg-[#1558b0] transition-colors">Save</button>
                         </div>
                     </div>
                 </div>
@@ -282,7 +279,6 @@ function DashboardView({ config, selectedManager, setSelectedManager, onUpdateLi
 function SettingsView({ config, onUpdateLink, onUpdateReportDetails, onAddManager, onAddReport }) {
     const [newManagerName, setNewManagerName] = useState('');
     const [newReportTitle, setNewReportTitle] = useState('');
-    const [newReportImageUrl, setNewReportImageUrl] = useState('');
 
     const handleManagerSubmit = (e) => {
         e.preventDefault();
@@ -292,9 +288,8 @@ function SettingsView({ config, onUpdateLink, onUpdateReportDetails, onAddManage
 
     const handleReportSubmit = (e) => {
         e.preventDefault();
-        onAddReport(newReportTitle.trim(), newReportImageUrl.trim());
+        onAddReport(newReportTitle.trim());
         setNewReportTitle('');
-        setNewReportImageUrl('');
     };
 
     return (
@@ -305,13 +300,12 @@ function SettingsView({ config, onUpdateLink, onUpdateReportDetails, onAddManage
                 <form onSubmit={handleManagerSubmit} className="space-y-3 p-4 border rounded-lg">
                     <h3 className="text-lg font-semibold text-gray-700">Add New Manager</h3>
                     <input type="text" value={newManagerName} onChange={(e) => setNewManagerName(e.target.value)} placeholder="Manager's Name" className="w-full p-2 border border-gray-300 rounded-md" required />
-                    <button type="submit" className="flex items-center justify-center gap-2 w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition"><PlusIcon /> Add Manager</button>
+                    <button type="submit" className="flex items-center justify-center gap-2 w-full px-4 py-2 bg-[#1a73e8] text-white rounded-md hover:bg-[#1558b0] transition"><PlusIcon /> Add Manager</button>
                 </form>
                 <form onSubmit={handleReportSubmit} className="space-y-3 p-4 border rounded-lg">
                     <h3 className="text-lg font-semibold text-gray-700">Add New Report</h3>
                     <input type="text" value={newReportTitle} onChange={(e) => setNewReportTitle(e.target.value)} placeholder="Report Title" className="w-full p-2 border border-gray-300 rounded-md" required />
-                    <input type="url" value={newReportImageUrl} onChange={(e) => setNewReportImageUrl(e.target.value)} placeholder="Image URL (optional)" className="w-full p-2 border border-gray-300 rounded-md" />
-                    <button type="submit" className="flex items-center justify-center gap-2 w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition"><PlusIcon /> Add Report</button>
+                    <button type="submit" className="flex items-center justify-center gap-2 w-full px-4 py-2 bg-[#1a73e8] text-white rounded-md hover:bg-[#1558b0] transition"><PlusIcon /> Add Report</button>
                 </form>
             </div>
 
@@ -321,7 +315,6 @@ function SettingsView({ config, onUpdateLink, onUpdateReportDetails, onAddManage
                     <thead>
                         <tr className="bg-gray-100">
                             <th className="text-left font-semibold p-3 border border-gray-200">Report Title</th>
-                            <th className="text-left font-semibold p-3 border border-gray-200">Image URL</th>
                             {config.managers.map(manager => <th key={manager} className="text-left font-semibold p-3 border border-gray-200">{manager}</th>)}
                         </tr>
                     </thead>
@@ -329,7 +322,6 @@ function SettingsView({ config, onUpdateLink, onUpdateReportDetails, onAddManage
                         {config.reports.map(report => (
                             <tr key={report.id} className="hover:bg-gray-50">
                                 <td className="p-2 border border-gray-200"><input type="text" value={report.title} onChange={(e) => onUpdateReportDetails(report.id, { title: e.target.value })} className="w-full p-1.5 border border-gray-300 rounded-md text-sm focus:ring-1 focus:ring-blue-500 focus:border-blue-500"/></td>
-                                <td className="p-2 border border-gray-200"><input type="url" value={report.imageUrl || ''} onChange={(e) => onUpdateReportDetails(report.id, { imageUrl: e.target.value })} placeholder="Enter image URL..." className="w-full p-1.5 border border-gray-300 rounded-md text-sm focus:ring-1 focus:ring-blue-500 focus:border-blue-500"/></td>
                                 {config.managers.map(manager => (
                                     <td key={`${report.id}-${manager}`} className="p-2 border border-gray-200">
                                         <input type="url" value={report.links[manager] || ''} onChange={(e) => onUpdateLink(report.id, manager, e.target.value)} placeholder="Enter link..." className="w-full p-1.5 border border-gray-300 rounded-md text-sm focus:ring-1 focus:ring-blue-500 focus:border-blue-500"/>
