@@ -1,12 +1,23 @@
 import React, { useState, useEffect } from 'react';
 import { initializeApp } from 'firebase/app';
-import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'firebase/auth';
+import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, doc, onSnapshot, setDoc, updateDoc, arrayUnion } from 'firebase/firestore';
+
+// --- Your Firebase Configuration ---
+const firebaseConfig = {
+    apiKey: "AIzaSyAnlJKLpN9Pcr0XGBGjHYtKpnKo89z_7a4",
+    authDomain: "team-guide-71f64.firebaseapp.com",
+    projectId: "team-guide-71f64",
+    storageBucket: "team-guide-71f64.firebasestorage.app",
+    messagingSenderId: "1085668818935",
+    appId: "1:1085668818935:web:25e2b4eb0d6e9b2ccbf8f2",
+    measurementId: "G-7L89ZV8PVS"
+};
 
 // --- Helper: Icon Components ---
 const SettingsIcon = () => (
     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 0 2l-.15.08a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.38a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1 0-2l.15.08a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" /><circle cx="12" cy="12" r="3" />
+        <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 0 2l-.15.08a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l-.22-.38a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1 0-2l.15.08a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" /><circle cx="12" cy="12" r="3" />
     </svg>
 );
 const HomeIcon = () => (
@@ -47,15 +58,6 @@ export default function App() {
 
     // --- Firebase Initialization and Auth ---
     useEffect(() => {
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
-
-        if (!firebaseConfig) {
-            console.error("Firebase config not found.");
-            setIsLoading(false);
-            return;
-        }
-
         const app = initializeApp(firebaseConfig);
         const authInstance = getAuth(app);
         const dbInstance = getFirestore(app);
@@ -65,12 +67,7 @@ export default function App() {
         const unsubscribe = onAuthStateChanged(authInstance, async (user) => {
             if (!user) {
                 try {
-                    const token = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
-                    if (token) {
-                        await signInWithCustomToken(authInstance, token);
-                    } else {
-                        await signInAnonymously(authInstance);
-                    }
+                    await signInAnonymously(authInstance);
                 } catch (error) {
                     console.error("Authentication failed:", error);
                 }
@@ -85,8 +82,8 @@ export default function App() {
     useEffect(() => {
         if (!isAuthReady || !db) return;
 
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        const configRef = doc(db, `artifacts/${appId}/public/data/dashboardConfig`, 'main');
+        // Use a consistent document path for your public data
+        const configRef = doc(db, 'publicDashboard/mainConfig');
 
         const unsubscribe = onSnapshot(configRef, (docSnap) => {
             if (docSnap.exists()) {
@@ -115,8 +112,7 @@ export default function App() {
     // --- Data Update Handlers ---
     const updateFirestoreReports = async (newReports) => {
         if (!db) return;
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        const configRef = doc(db, `artifacts/${appId}/public/data/dashboardConfig`, 'main');
+        const configRef = doc(db, 'publicDashboard/mainConfig');
         await updateDoc(configRef, { reports: newReports });
     };
 
@@ -145,8 +141,7 @@ export default function App() {
             links: { ...report.links, [managerName]: "" }
         }));
 
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        const configRef = doc(db, `artifacts/${appId}/public/data/dashboardConfig`, 'main');
+        const configRef = doc(db, 'publicDashboard/mainConfig');
         await updateDoc(configRef, {
             managers: arrayUnion(managerName),
             reports: newReports
@@ -166,8 +161,7 @@ export default function App() {
             links: newLinks
         };
 
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        const configRef = doc(db, `artifacts/${appId}/public/data/dashboardConfig`, 'main');
+        const configRef = doc(db, 'publicDashboard/mainConfig');
         await updateDoc(configRef, {
             reports: arrayUnion(newReport)
         });
