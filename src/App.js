@@ -44,14 +44,52 @@ const TrashIcon = () => (
         <path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" />
     </svg>
 );
+const UpIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <polyline points="18 15 12 9 6 15" />
+    </svg>
+);
+const DownIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <polyline points="6 9 12 15 18 9" />
+    </svg>
+);
 
 // --- Initial Data for First-Time Setup ---
 const initialData = {
     managers: ["Manager - Alex Ray", "Manager - Jordan Lee", "Manager - Casey Smith"],
+    folders: [{ id: "folder_general", name: "General" }],
     reports: [
-        { id: "rep_1", title: "Team Activities Today", links: { "Manager - Alex Ray": "https://example.com/report/activities/alex", "Manager - Jordan Lee": "https://example.com/report/activities/jordan", "Manager - Casey Smith": "https://example.com/report/activities/casey" } },
-        { id: "rep_2", title: "Team Accounts by Status", links: { "Manager - Alex Ray": "https://example.com/report/accounts/alex", "Manager - Jordan Lee": "https://example.com/report/accounts/jordan", "Manager - Casey Smith": "https://example.com/report/accounts/casey" } },
-        { id: "rep_3", title: "Team Leads", links: { "Manager - Alex Ray": "https://example.com/report/leads/alex", "Manager - Jordan Lee": "https://example.com/report/leads/jordan", "Manager - Casey Smith": "https://example.com/report/leads/casey" } },
+        {
+            id: "rep_1",
+            title: "Team Activities Today",
+            folderId: "folder_general",
+            links: {
+                "Manager - Alex Ray": "https://example.com/report/activities/alex",
+                "Manager - Jordan Lee": "https://example.com/report/activities/jordan",
+                "Manager - Casey Smith": "https://example.com/report/activities/casey"
+            }
+        },
+        {
+            id: "rep_2",
+            title: "Team Accounts by Status",
+            folderId: "folder_general",
+            links: {
+                "Manager - Alex Ray": "https://example.com/report/accounts/alex",
+                "Manager - Jordan Lee": "https://example.com/report/accounts/jordan",
+                "Manager - Casey Smith": "https://example.com/report/accounts/casey"
+            }
+        },
+        {
+            id: "rep_3",
+            title: "Team Leads",
+            folderId: "folder_general",
+            links: {
+                "Manager - Alex Ray": "https://example.com/report/leads/alex",
+                "Manager - Jordan Lee": "https://example.com/report/leads/jordan",
+                "Manager - Casey Smith": "https://example.com/report/leads/casey"
+            }
+        },
     ]
 };
 
@@ -61,8 +99,9 @@ export default function App() {
     const [view, setView] = useState('dashboard');
     const [db, setDb] = useState(null);
     const [isAuthReady, setIsAuthReady] = useState(false);
-    const [config, setConfig] = useState({ managers: [], reports: [] });
+    const [config, setConfig] = useState({ managers: [], reports: [], folders: [] });
     const [selectedManager, setSelectedManager] = useState('');
+    const [selectedFolder, setSelectedFolder] = useState('');
     const [isLoading, setIsLoading] = useState(true);
 
     // --- Firebase Initialization and Auth ---
@@ -96,17 +135,29 @@ export default function App() {
         const unsubscribe = onSnapshot(configRef, (docSnap) => {
             if (docSnap.exists()) {
                 const data = docSnap.data();
+                if (!data.folders) {
+                    data.folders = [{ id: "folder_general", name: "General" }];
+                }
+                if (data.reports) {
+                    data.reports = data.reports.map(r => ({ folderId: r.folderId || data.folders[0].id, ...r }));
+                }
                 setConfig(data);
                 if (!selectedManager && data.managers.length > 0) {
                     setSelectedManager(data.managers[0]);
                 } else if (selectedManager && !data.managers.includes(selectedManager)) {
                     setSelectedManager(data.managers[0] || '');
                 }
+                if (!selectedFolder && data.folders.length > 0) {
+                    setSelectedFolder(data.folders[0].id);
+                } else if (selectedFolder && !data.folders.some(f => f.id === selectedFolder)) {
+                    setSelectedFolder(data.folders[0]?.id || '');
+                }
             } else {
                 console.log("No config found, creating initial document...");
                 setDoc(configRef, initialData);
                 setConfig(initialData);
                 setSelectedManager(initialData.managers[0]);
+                setSelectedFolder(initialData.folders[0].id);
             }
             setIsLoading(false);
         }, (error) => {
@@ -115,7 +166,7 @@ export default function App() {
         });
 
         return () => unsubscribe();
-    }, [isAuthReady, db, selectedManager]);
+    }, [isAuthReady, db, selectedManager, selectedFolder]);
 
     // --- Data Update Handlers ---
     const updateFirestoreReports = async (newReports) => {
@@ -165,6 +216,7 @@ export default function App() {
         const newReport = {
             id: newReportId,
             title: reportTitle,
+            folderId: config.folders[0]?.id || "",
             links: newLinks
         };
 
@@ -172,6 +224,27 @@ export default function App() {
         await updateDoc(configRef, {
             reports: arrayUnion(newReport)
         });
+    };
+
+    const handleAddFolder = async (folderName) => {
+        if (!db || !folderName) return;
+        const newFolder = { id: `fol_${new Date().getTime()}`, name: folderName };
+        const configRef = doc(db, 'publicDashboard/mainConfig');
+        await updateDoc(configRef, {
+            folders: arrayUnion(newFolder)
+        });
+        setSelectedFolder(prev => prev || newFolder.id);
+    };
+
+    const handleMoveReport = async (reportId, direction) => {
+        const index = config.reports.findIndex(r => r.id === reportId);
+        if (index === -1) return;
+        const newReports = [...config.reports];
+        const newIndex = direction === 'up' ? index - 1 : index + 1;
+        if (newIndex < 0 || newIndex >= newReports.length) return;
+        const [moved] = newReports.splice(index, 1);
+        newReports.splice(newIndex, 0, moved);
+        await updateFirestoreReports(newReports);
     };
 
     const handleDeleteManager = async (managerName) => {
@@ -208,6 +281,8 @@ export default function App() {
                         config={config}
                         selectedManager={selectedManager}
                         setSelectedManager={setSelectedManager}
+                        selectedFolder={selectedFolder}
+                        setSelectedFolder={setSelectedFolder}
                         onUpdateLink={handleUpdateLink}
                     />
                 ) : (
@@ -217,8 +292,10 @@ export default function App() {
                         onUpdateReportDetails={handleUpdateReportDetails}
                         onAddManager={handleAddManager}
                         onAddReport={handleAddReport}
+                        onAddFolder={handleAddFolder}
                         onDeleteManager={handleDeleteManager}
                         onDeleteReport={handleDeleteReport}
+                        onMoveReport={handleMoveReport}
                     />
                 )}
             </main>
@@ -248,7 +325,7 @@ function Header({ view, setView }) {
     );
 }
 
-function DashboardView({ config, selectedManager, setSelectedManager, onUpdateLink }) {
+function DashboardView({ config, selectedManager, setSelectedManager, selectedFolder, setSelectedFolder, onUpdateLink }) {
     const [editing, setEditing] = useState(null);
 
     const handleEditClick = (report) => {
@@ -264,6 +341,17 @@ function DashboardView({ config, selectedManager, setSelectedManager, onUpdateLi
 
     return (
         <div>
+            <div className="mb-4 flex gap-2 border-b overflow-x-auto">
+                {config.folders.map(folder => (
+                    <button
+                        key={folder.id}
+                        onClick={() => setSelectedFolder(folder.id)}
+                        className={`px-4 py-2 rounded-t ${selectedFolder === folder.id ? 'bg-white border border-b-white text-[#1a73e8]' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'} transition-colors`}
+                    >
+                        {folder.name}
+                    </button>
+                ))}
+            </div>
             <div className="mb-8 p-4 bg-white rounded-lg shadow-sm max-w-sm">
                 <label htmlFor="managerFilter" className="block text-sm font-medium text-gray-700 mb-2">Select a Manager:</label>
                 <select id="managerFilter" value={selectedManager} onChange={(e) => setSelectedManager(e.target.value)} className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition">
@@ -272,7 +360,7 @@ function DashboardView({ config, selectedManager, setSelectedManager, onUpdateLi
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-                {config.reports.map(report => (
+                {config.reports.filter(report => report.folderId === selectedFolder).map(report => (
                     <div key={report.id} className="bg-white rounded-xl shadow-[0_4px_12px_rgba(0,0,0,0.08)] p-6 flex flex-col justify-between transition-all duration-150 hover:-translate-y-1 hover:shadow-[0_8px_18px_rgba(0,0,0,0.12)]">
                         <div className="flex justify-between items-start">
                              <h3 className="text-xl font-semibold text-gray-800 mb-4">{report.title}</h3>
@@ -307,9 +395,10 @@ function DashboardView({ config, selectedManager, setSelectedManager, onUpdateLi
     );
 }
 
-function SettingsView({ config, onUpdateLink, onUpdateReportDetails, onAddManager, onAddReport, onDeleteManager, onDeleteReport }) {
+function SettingsView({ config, onUpdateLink, onUpdateReportDetails, onAddManager, onAddReport, onAddFolder, onDeleteManager, onDeleteReport, onMoveReport }) {
     const [newManagerName, setNewManagerName] = useState('');
     const [newReportTitle, setNewReportTitle] = useState('');
+    const [newFolderName, setNewFolderName] = useState('');
 
     const handleManagerSubmit = (e) => {
         e.preventDefault();
@@ -323,11 +412,17 @@ function SettingsView({ config, onUpdateLink, onUpdateReportDetails, onAddManage
         setNewReportTitle('');
     };
 
+    const handleFolderSubmit = (e) => {
+        e.preventDefault();
+        onAddFolder(newFolderName.trim());
+        setNewFolderName('');
+    };
+
     return (
         <div className="bg-white p-4 sm:p-6 rounded-lg shadow-md">
             <h2 className="text-2xl font-bold mb-6 text-gray-800">Settings</h2>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-8">
                 <form onSubmit={handleManagerSubmit} className="space-y-3 p-4 border rounded-lg">
                     <h3 className="text-lg font-semibold text-gray-700">Add New Manager</h3>
                     <input type="text" value={newManagerName} onChange={(e) => setNewManagerName(e.target.value)} placeholder="Manager's Name" className="w-full p-2 border border-gray-300 rounded-md" required />
@@ -338,6 +433,11 @@ function SettingsView({ config, onUpdateLink, onUpdateReportDetails, onAddManage
                     <input type="text" value={newReportTitle} onChange={(e) => setNewReportTitle(e.target.value)} placeholder="Report Title" className="w-full p-2 border border-gray-300 rounded-md" required />
                     <button type="submit" className="flex items-center justify-center gap-2 w-full px-4 py-2 bg-[#1a73e8] text-white rounded-md hover:bg-[#1558b0] transition"><PlusIcon /> Add Report</button>
                 </form>
+                <form onSubmit={handleFolderSubmit} className="space-y-3 p-4 border rounded-lg">
+                    <h3 className="text-lg font-semibold text-gray-700">Add New Folder</h3>
+                    <input type="text" value={newFolderName} onChange={(e) => setNewFolderName(e.target.value)} placeholder="Folder Name" className="w-full p-2 border border-gray-300 rounded-md" required />
+                    <button type="submit" className="flex items-center justify-center gap-2 w-full px-4 py-2 bg-[#1a73e8] text-white rounded-md hover:bg-[#1558b0] transition"><PlusIcon /> Add Folder</button>
+                </form>
             </div>
 
             <h3 className="text-lg font-semibold text-gray-700 mb-4">Report Links & Details</h3>
@@ -346,6 +446,7 @@ function SettingsView({ config, onUpdateLink, onUpdateReportDetails, onAddManage
                     <thead>
                         <tr className="bg-gray-100">
                             <th className="text-left font-semibold p-3 border border-gray-200">Report Title</th>
+                            <th className="text-left font-semibold p-3 border border-gray-200">Folder</th>
                             {config.managers.map(manager => (
                                 <th key={manager} className="text-left font-semibold p-3 border border-gray-200">
                                     <div className="flex items-center justify-between">
@@ -362,16 +463,33 @@ function SettingsView({ config, onUpdateLink, onUpdateReportDetails, onAddManage
                     <tbody>
                         {config.reports.map(report => (
                             <tr key={report.id} className="hover:bg-gray-50">
-                                <td className="p-2 border border-gray-200"><input type="text" value={report.title} onChange={(e) => onUpdateReportDetails(report.id, { title: e.target.value })} className="w-full p-1.5 border border-gray-300 rounded-md text-sm focus:ring-1 focus:ring-blue-500 focus:border-blue-500"/></td>
+                                <td className="p-2 border border-gray-200">
+                                    <input type="text" value={report.title} onChange={(e) => onUpdateReportDetails(report.id, { title: e.target.value })} className="w-full p-1.5 border border-gray-300 rounded-md text-sm focus:ring-1 focus:ring-blue-500 focus:border-blue-500"/>
+                                </td>
+                                <td className="p-2 border border-gray-200">
+                                    <select value={report.folderId || ''} onChange={(e) => onUpdateReportDetails(report.id, { folderId: e.target.value })} className="w-full p-1.5 border border-gray-300 rounded-md text-sm focus:ring-1 focus:ring-blue-500 focus:border-blue-500">
+                                        {config.folders.map(folder => (
+                                            <option key={folder.id} value={folder.id}>{folder.name}</option>
+                                        ))}
+                                    </select>
+                                </td>
                                 {config.managers.map(manager => (
                                     <td key={`${report.id}-${manager}`} className="p-2 border border-gray-200">
                                         <input type="url" value={report.links[manager] || ''} onChange={(e) => onUpdateLink(report.id, manager, e.target.value)} placeholder="Enter link..." className="w-full p-1.5 border border-gray-300 rounded-md text-sm focus:ring-1 focus:ring-blue-500 focus:border-blue-500"/>
                                     </td>
                                 ))}
                                 <td className="p-2 border border-gray-200 text-center">
-                                    <button onClick={() => onDeleteReport(report.id)} className="p-1 text-red-500 hover:text-red-700" title="Delete Report">
-                                        <TrashIcon />
-                                    </button>
+                                    <div className="flex justify-center gap-2">
+                                        <button onClick={() => onMoveReport(report.id, 'up')} className="p-1 text-gray-500 hover:text-gray-700" title="Move Up">
+                                            <UpIcon />
+                                        </button>
+                                        <button onClick={() => onMoveReport(report.id, 'down')} className="p-1 text-gray-500 hover:text-gray-700" title="Move Down">
+                                            <DownIcon />
+                                        </button>
+                                        <button onClick={() => onDeleteReport(report.id)} className="p-1 text-red-500 hover:text-red-700" title="Delete Report">
+                                            <TrashIcon />
+                                        </button>
+                                    </div>
                                 </td>
                             </tr>
                         ))}
