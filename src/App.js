@@ -35,6 +35,15 @@ const PencilIcon = () => (
         <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path>
     </svg>
 );
+const TrashIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <polyline points="3 6 5 6 21 6" />
+        <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+        <path d="M10 11v6" />
+        <path d="M14 11v6" />
+        <path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" />
+    </svg>
+);
 
 // --- Initial Data for First-Time Setup ---
 const initialData = {
@@ -165,6 +174,26 @@ export default function App() {
         });
     };
 
+    const handleDeleteManager = async (managerName) => {
+        if (!db) return;
+
+        const newManagers = config.managers.filter(m => m !== managerName);
+        const newReports = config.reports.map(report => {
+            const { [managerName]: _removed, ...links } = report.links;
+            return { ...report, links };
+        });
+
+        const configRef = doc(db, 'publicDashboard/mainConfig');
+        await updateDoc(configRef, { managers: newManagers, reports: newReports });
+    };
+
+    const handleDeleteReport = async (reportId) => {
+        if (!db) return;
+        const newReports = config.reports.filter(r => r.id !== reportId);
+        const configRef = doc(db, 'publicDashboard/mainConfig');
+        await updateDoc(configRef, { reports: newReports });
+    };
+
     // --- Render Logic ---
     if (isLoading) {
         return <div className="flex items-center justify-center h-screen bg-gray-100"><div className="text-xl font-medium text-gray-600">Loading Dashboard...</div></div>;
@@ -188,6 +217,8 @@ export default function App() {
                         onUpdateReportDetails={handleUpdateReportDetails}
                         onAddManager={handleAddManager}
                         onAddReport={handleAddReport}
+                        onDeleteManager={handleDeleteManager}
+                        onDeleteReport={handleDeleteReport}
                     />
                 )}
             </main>
@@ -276,7 +307,7 @@ function DashboardView({ config, selectedManager, setSelectedManager, onUpdateLi
     );
 }
 
-function SettingsView({ config, onUpdateLink, onUpdateReportDetails, onAddManager, onAddReport }) {
+function SettingsView({ config, onUpdateLink, onUpdateReportDetails, onAddManager, onAddReport, onDeleteManager, onDeleteReport }) {
     const [newManagerName, setNewManagerName] = useState('');
     const [newReportTitle, setNewReportTitle] = useState('');
 
@@ -315,7 +346,17 @@ function SettingsView({ config, onUpdateLink, onUpdateReportDetails, onAddManage
                     <thead>
                         <tr className="bg-gray-100">
                             <th className="text-left font-semibold p-3 border border-gray-200">Report Title</th>
-                            {config.managers.map(manager => <th key={manager} className="text-left font-semibold p-3 border border-gray-200">{manager}</th>)}
+                            {config.managers.map(manager => (
+                                <th key={manager} className="text-left font-semibold p-3 border border-gray-200">
+                                    <div className="flex items-center justify-between">
+                                        <span>{manager}</span>
+                                        <button onClick={() => onDeleteManager(manager)} className="ml-2 p-1 text-red-500 hover:text-red-700" title="Delete Manager">
+                                            <TrashIcon />
+                                        </button>
+                                    </div>
+                                </th>
+                            ))}
+                            <th className="text-left font-semibold p-3 border border-gray-200">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -327,6 +368,11 @@ function SettingsView({ config, onUpdateLink, onUpdateReportDetails, onAddManage
                                         <input type="url" value={report.links[manager] || ''} onChange={(e) => onUpdateLink(report.id, manager, e.target.value)} placeholder="Enter link..." className="w-full p-1.5 border border-gray-300 rounded-md text-sm focus:ring-1 focus:ring-blue-500 focus:border-blue-500"/>
                                     </td>
                                 ))}
+                                <td className="p-2 border border-gray-200 text-center">
+                                    <button onClick={() => onDeleteReport(report.id)} className="p-1 text-red-500 hover:text-red-700" title="Delete Report">
+                                        <TrashIcon />
+                                    </button>
+                                </td>
                             </tr>
                         ))}
                     </tbody>
