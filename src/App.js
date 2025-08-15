@@ -90,6 +90,10 @@ const initialData = {
                 "Manager - Casey Smith": "https://example.com/report/leads/casey"
             }
         },
+    ],
+    navLinks: [
+        { id: "nav_1", title: "Company Portal", url: "https://example.com" },
+        { id: "nav_2", title: "Support Docs", url: "https://example.com/docs" }
     ]
 };
 
@@ -99,7 +103,7 @@ export default function App() {
     const [view, setView] = useState('dashboard');
     const [db, setDb] = useState(null);
     const [isAuthReady, setIsAuthReady] = useState(false);
-    const [config, setConfig] = useState({ managers: [], reports: [], folders: [] });
+    const [config, setConfig] = useState({ managers: [], reports: [], folders: [], navLinks: [] });
     const [selectedManager, setSelectedManager] = useState('');
     const [selectedFolder, setSelectedFolder] = useState('');
     const [isLoading, setIsLoading] = useState(true);
@@ -141,6 +145,9 @@ export default function App() {
                 if (data.reports) {
                     data.reports = data.reports.map(r => ({ folderId: r.folderId || data.folders[0].id, ...r }));
                 }
+                if (!data.navLinks) {
+                    data.navLinks = [];
+                }
                 setConfig(data);
                 if (!selectedManager && data.managers.length > 0) {
                     setSelectedManager(data.managers[0]);
@@ -173,6 +180,18 @@ export default function App() {
         if (!db) return;
         const configRef = doc(db, 'publicDashboard/mainConfig');
         await updateDoc(configRef, { reports: newReports });
+    };
+
+    const updateFirestoreFolders = async (newFolders) => {
+        if (!db) return;
+        const configRef = doc(db, 'publicDashboard/mainConfig');
+        await updateDoc(configRef, { folders: newFolders });
+    };
+
+    const updateFirestoreNavLinks = async (newLinks) => {
+        if (!db) return;
+        const configRef = doc(db, 'publicDashboard/mainConfig');
+        await updateDoc(configRef, { navLinks: newLinks });
     };
 
     const handleUpdateReportDetails = async (reportId, newDetails) => {
@@ -236,6 +255,30 @@ export default function App() {
         setSelectedFolder(prev => prev || newFolder.id);
     };
 
+    const handleMoveFolder = async (folderId, direction) => {
+        const index = config.folders.findIndex(f => f.id === folderId);
+        if (index === -1) return;
+        const newFolders = [...config.folders];
+        const newIndex = direction === 'up' ? index - 1 : index + 1;
+        if (newIndex < 0 || newIndex >= newFolders.length) return;
+        const [moved] = newFolders.splice(index, 1);
+        newFolders.splice(newIndex, 0, moved);
+        await updateFirestoreFolders(newFolders);
+    };
+
+    const handleDeleteFolder = async (folderId) => {
+        if (!db) return;
+        const newFolders = config.folders.filter(f => f.id !== folderId);
+        const newReports = config.reports.map(r =>
+            r.folderId === folderId ? { ...r, folderId: newFolders[0]?.id || '' } : r
+        );
+        const configRef = doc(db, 'publicDashboard/mainConfig');
+        await updateDoc(configRef, { folders: newFolders, reports: newReports });
+        if (selectedFolder === folderId) {
+            setSelectedFolder(newFolders[0]?.id || '');
+        }
+    };
+
     const handleMoveReport = async (reportId, direction) => {
         const index = config.reports.findIndex(r => r.id === reportId);
         if (index === -1) return;
@@ -267,6 +310,40 @@ export default function App() {
         await updateDoc(configRef, { reports: newReports });
     };
 
+    const handleAddNavLink = async (title, url) => {
+        if (!db || !title || !url) return;
+        const newLink = { id: `nav_${new Date().getTime()}`, title, url };
+        const configRef = doc(db, 'publicDashboard/mainConfig');
+        await updateDoc(configRef, {
+            navLinks: arrayUnion(newLink)
+        });
+    };
+
+    const handleUpdateNavLink = async (linkId, newDetails) => {
+        const newLinks = config.navLinks.map(link =>
+            link.id === linkId ? { ...link, ...newDetails } : link
+        );
+        await updateFirestoreNavLinks(newLinks);
+    };
+
+    const handleMoveNavLink = async (linkId, direction) => {
+        const index = config.navLinks.findIndex(l => l.id === linkId);
+        if (index === -1) return;
+        const newLinks = [...config.navLinks];
+        const newIndex = direction === 'up' ? index - 1 : index + 1;
+        if (newIndex < 0 || newIndex >= newLinks.length) return;
+        const [moved] = newLinks.splice(index, 1);
+        newLinks.splice(newIndex, 0, moved);
+        await updateFirestoreNavLinks(newLinks);
+    };
+
+    const handleDeleteNavLink = async (linkId) => {
+        if (!db) return;
+        const newLinks = config.navLinks.filter(l => l.id !== linkId);
+        const configRef = doc(db, 'publicDashboard/mainConfig');
+        await updateDoc(configRef, { navLinks: newLinks });
+    };
+
     // --- Render Logic ---
     if (isLoading) {
         return <div className="flex items-center justify-center h-screen bg-gray-100"><div className="text-xl font-medium text-gray-600">Loading Dashboard...</div></div>;
@@ -276,7 +353,7 @@ export default function App() {
         <div className="min-h-screen bg-[#f4f6f8] font-sans">
             <Header view={view} setView={setView} />
             <main className="container mx-auto p-8">
-                {view === 'dashboard' ? (
+                {view === 'dashboard' && (
                     <DashboardView
                         config={config}
                         selectedManager={selectedManager}
@@ -285,7 +362,8 @@ export default function App() {
                         setSelectedFolder={setSelectedFolder}
                         onUpdateLink={handleUpdateLink}
                     />
-                ) : (
+                )}
+                {view === 'settings' && (
                     <SettingsView
                         config={config}
                         onUpdateLink={handleUpdateLink}
@@ -296,6 +374,22 @@ export default function App() {
                         onDeleteManager={handleDeleteManager}
                         onDeleteReport={handleDeleteReport}
                         onMoveReport={handleMoveReport}
+                        onMoveFolder={handleMoveFolder}
+                        onDeleteFolder={handleDeleteFolder}
+                    />
+                )}
+                {view === 'mainNav' && (
+                    <MainNavView
+                        navLinks={config.navLinks}
+                    />
+                )}
+                {view === 'mainNavSettings' && (
+                    <MainNavSettingsView
+                        navLinks={config.navLinks}
+                        onAddNavLink={handleAddNavLink}
+                        onUpdateNavLink={handleUpdateNavLink}
+                        onDeleteNavLink={handleDeleteNavLink}
+                        onMoveNavLink={handleMoveNavLink}
                     />
                 )}
             </main>
@@ -306,18 +400,39 @@ export default function App() {
 // --- View Components ---
 
 function Header({ view, setView }) {
+    const inSettings = view === 'settings' || view === 'mainNavSettings';
+    const activeSection = view.startsWith('mainNav') ? 'mainNav' : 'dashboard';
     return (
         <header className="bg-[#1a73e8] text-white text-center py-4 px-8">
             <div className="container mx-auto flex justify-between items-center">
-                <h1 className="text-2xl font-bold flex-grow">Team Dashboard</h1>
-                <nav>
+                <h1 className="text-2xl font-bold flex-grow">
+                    {activeSection === 'mainNav' ? 'Main Navigation' : 'Team Dashboard'}
+                </h1>
+                <nav className="flex items-center gap-2">
                     <button
-                        onClick={() => setView(view === 'dashboard' ? 'settings' : 'dashboard')}
-                        className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-white/20 hover:bg-white/30 transition-colors"
-                        title={view === 'dashboard' ? 'Go to Settings' : 'Go to Dashboard'}
+                        onClick={() => setView('dashboard')}
+                        className={`px-3 py-1.5 rounded-md transition-colors ${activeSection === 'dashboard' ? 'bg-white/30' : 'bg-white/20 hover:bg-white/30'}`}
                     >
-                        {view === 'dashboard' ? <SettingsIcon /> : <HomeIcon />}
-                        <span className="hidden sm:inline">{view === 'dashboard' ? 'Settings' : 'Dashboard'}</span>
+                        Dashboard
+                    </button>
+                    <button
+                        onClick={() => setView('mainNav')}
+                        className={`px-3 py-1.5 rounded-md transition-colors ${activeSection === 'mainNav' ? 'bg-white/30' : 'bg-white/20 hover:bg-white/30'}`}
+                    >
+                        Main Nav
+                    </button>
+                    <button
+                        onClick={() => {
+                            if (view === 'dashboard') setView('settings');
+                            else if (view === 'settings') setView('dashboard');
+                            else if (view === 'mainNav') setView('mainNavSettings');
+                            else if (view === 'mainNavSettings') setView('mainNav');
+                        }}
+                        className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-white/20 hover:bg-white/30 transition-colors"
+                        title={inSettings ? 'Go to Main View' : 'Go to Settings'}
+                    >
+                        {inSettings ? <HomeIcon /> : <SettingsIcon />}
+                        <span className="hidden sm:inline">{inSettings ? 'Back' : 'Settings'}</span>
                     </button>
                 </nav>
             </div>
@@ -395,7 +510,7 @@ function DashboardView({ config, selectedManager, setSelectedManager, selectedFo
     );
 }
 
-function SettingsView({ config, onUpdateLink, onUpdateReportDetails, onAddManager, onAddReport, onAddFolder, onDeleteManager, onDeleteReport, onMoveReport }) {
+function SettingsView({ config, onUpdateLink, onUpdateReportDetails, onAddManager, onAddReport, onAddFolder, onDeleteManager, onDeleteReport, onMoveReport, onMoveFolder, onDeleteFolder }) {
     const [newManagerName, setNewManagerName] = useState('');
     const [newReportTitle, setNewReportTitle] = useState('');
     const [newFolderName, setNewFolderName] = useState('');
@@ -438,6 +553,38 @@ function SettingsView({ config, onUpdateLink, onUpdateReportDetails, onAddManage
                     <input type="text" value={newFolderName} onChange={(e) => setNewFolderName(e.target.value)} placeholder="Folder Name" className="w-full p-2 border border-gray-300 rounded-md" required />
                     <button type="submit" className="flex items-center justify-center gap-2 w-full px-4 py-2 bg-[#1a73e8] text-white rounded-md hover:bg-[#1558b0] transition"><PlusIcon /> Add Folder</button>
                 </form>
+            </div>
+
+            <h3 className="text-lg font-semibold text-gray-700 mb-4">Manage Folders</h3>
+            <div className="overflow-x-auto mb-8">
+                <table className="min-w-full border-collapse">
+                    <thead>
+                        <tr className="bg-gray-100">
+                            <th className="text-left font-semibold p-3 border border-gray-200">Folder Name</th>
+                            <th className="text-left font-semibold p-3 border border-gray-200">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {config.folders.map(folder => (
+                            <tr key={folder.id} className="hover:bg-gray-50">
+                                <td className="p-2 border border-gray-200">{folder.name}</td>
+                                <td className="p-2 border border-gray-200 text-center">
+                                    <div className="flex justify-center gap-2">
+                                        <button onClick={() => onMoveFolder(folder.id, 'up')} className="p-1 text-gray-500 hover:text-gray-700" title="Move Up">
+                                            <UpIcon />
+                                        </button>
+                                        <button onClick={() => onMoveFolder(folder.id, 'down')} className="p-1 text-gray-500 hover:text-gray-700" title="Move Down">
+                                            <DownIcon />
+                                        </button>
+                                        <button onClick={() => onDeleteFolder(folder.id)} className="p-1 text-red-500 hover:text-red-700" title="Delete Folder">
+                                            <TrashIcon />
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
             </div>
 
             <h3 className="text-lg font-semibold text-gray-700 mb-4">Report Links & Details</h3>
@@ -487,6 +634,89 @@ function SettingsView({ config, onUpdateLink, onUpdateReportDetails, onAddManage
                                             <DownIcon />
                                         </button>
                                         <button onClick={() => onDeleteReport(report.id)} className="p-1 text-red-500 hover:text-red-700" title="Delete Report">
+                                            <TrashIcon />
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    );
+}
+
+function MainNavView({ navLinks }) {
+    return (
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+            {navLinks.map(link => (
+                <a
+                    key={link.id}
+                    href={link.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="bg-white rounded-xl shadow-[0_4px_12px_rgba(0,0,0,0.08)] p-6 flex items-center justify-center text-center font-semibold text-gray-800 hover:-translate-y-1 hover:shadow-[0_8px_18px_rgba(0,0,0,0.12)] transition-all duration-150"
+                >
+                    {link.title}
+                </a>
+            ))}
+            {navLinks.length === 0 && (
+                <p className="text-gray-600 col-span-full">No links added yet.</p>
+            )}
+        </div>
+    );
+}
+
+function MainNavSettingsView({ navLinks, onAddNavLink, onUpdateNavLink, onDeleteNavLink, onMoveNavLink }) {
+    const [newTitle, setNewTitle] = useState('');
+    const [newUrl, setNewUrl] = useState('');
+
+    const handleSubmit = (e) => {
+        e.preventDefault();
+        onAddNavLink(newTitle.trim(), newUrl.trim());
+        setNewTitle('');
+        setNewUrl('');
+    };
+
+    return (
+        <div className="bg-white p-4 sm:p-6 rounded-lg shadow-md">
+            <h2 className="text-2xl font-bold mb-6 text-gray-800">Main Navigation Settings</h2>
+
+            <form onSubmit={handleSubmit} className="space-y-3 p-4 border rounded-lg mb-8">
+                <h3 className="text-lg font-semibold text-gray-700">Add New Link</h3>
+                <input type="text" value={newTitle} onChange={(e) => setNewTitle(e.target.value)} placeholder="Link Title" className="w-full p-2 border border-gray-300 rounded-md" required />
+                <input type="url" value={newUrl} onChange={(e) => setNewUrl(e.target.value)} placeholder="https://example.com" className="w-full p-2 border border-gray-300 rounded-md" required />
+                <button type="submit" className="flex items-center justify-center gap-2 w-full px-4 py-2 bg-[#1a73e8] text-white rounded-md hover:bg-[#1558b0] transition"><PlusIcon /> Add Link</button>
+            </form>
+
+            <div className="overflow-x-auto">
+                <table className="min-w-full border-collapse">
+                    <thead>
+                        <tr className="bg-gray-100">
+                            <th className="text-left font-semibold p-3 border border-gray-200">Title</th>
+                            <th className="text-left font-semibold p-3 border border-gray-200">URL</th>
+                            <th className="text-left font-semibold p-3 border border-gray-200">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {navLinks.map(link => (
+                            <tr key={link.id} className="hover:bg-gray-50">
+                                <td className="p-2 border border-gray-200">
+                                    <input type="text" value={link.title} onChange={(e) => onUpdateNavLink(link.id, { title: e.target.value })} className="w-full p-1.5 border border-gray-300 rounded-md text-sm focus:ring-1 focus:ring-blue-500 focus:border-blue-500"/>
+                                </td>
+                                <td className="p-2 border border-gray-200">
+                                    <input type="url" value={link.url} onChange={(e) => onUpdateNavLink(link.id, { url: e.target.value })} className="w-full p-1.5 border border-gray-300 rounded-md text-sm focus:ring-1 focus:ring-blue-500 focus:border-blue-500"/>
+                                </td>
+                                <td className="p-2 border border-gray-200 text-center">
+                                    <div className="flex justify-center gap-2">
+                                        <button onClick={() => onMoveNavLink(link.id, 'up')} className="p-1 text-gray-500 hover:text-gray-700" title="Move Up">
+                                            <UpIcon />
+                                        </button>
+                                        <button onClick={() => onMoveNavLink(link.id, 'down')} className="p-1 text-gray-500 hover:text-gray-700" title="Move Down">
+                                            <DownIcon />
+                                        </button>
+                                        <button onClick={() => onDeleteNavLink(link.id)} className="p-1 text-red-500 hover:text-red-700" title="Delete">
                                             <TrashIcon />
                                         </button>
                                     </div>
